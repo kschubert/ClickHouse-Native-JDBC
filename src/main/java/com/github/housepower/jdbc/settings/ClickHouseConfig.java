@@ -14,6 +14,8 @@ import java.util.regex.Pattern;
 
 public class ClickHouseConfig {
 
+    private String url;
+
     private int port;
 
     private String address;
@@ -37,6 +39,7 @@ public class ClickHouseConfig {
     }
 
     public ClickHouseConfig(String url, Properties properties) throws SQLException {
+        this.url = url;
         this.settings = parseJDBCUrl(url);
         this.settings.putAll(parseJDBCProperties(properties));
 
@@ -52,6 +55,10 @@ public class ClickHouseConfig {
         // https://docs.oracle.com/javase/7/docs/api/java/net/Socket.html#connect(java.net.SocketAddress,%20int)
         this.soTimeout = (obj = settings.remove(SettingKey.query_timeout)) == null ? 0 : (Integer) obj * 1000;
         this.connectTimeout = (obj = settings.remove(SettingKey.connect_timeout)) == null ? 0 : (Integer) obj * 1000;
+    }
+
+    public String url() {
+        return url;
     }
 
     public int port() {

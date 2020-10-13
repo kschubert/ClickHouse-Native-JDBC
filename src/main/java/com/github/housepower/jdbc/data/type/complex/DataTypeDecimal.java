@@ -1,5 +1,14 @@
 package com.github.housepower.jdbc.data.type.complex;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Locale;
+
 import com.github.housepower.jdbc.connect.PhysicalInfo;
 import com.github.housepower.jdbc.data.IDataType;
 import com.github.housepower.jdbc.misc.SQLLexer;
@@ -7,13 +16,6 @@ import com.github.housepower.jdbc.misc.StringView;
 import com.github.housepower.jdbc.misc.Validate;
 import com.github.housepower.jdbc.serializer.BinaryDeserializer;
 import com.github.housepower.jdbc.serializer.BinarySerializer;
-
-import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.sql.SQLException;
-import java.sql.Types;
-import java.util.Locale;
 
 public class DataTypeDecimal implements IDataType {
 
@@ -36,6 +38,10 @@ public class DataTypeDecimal implements IDataType {
             this.nobits = 32;
         } else if (this.precision <= 18) {
             this.nobits = 64;
+        } else if (this.precision <= 38) {
+            this.nobits = 128;
+        } else if (this.precision <= 76) {
+            this.nobits = 256;
         } else {
             throw new IllegalArgumentException(String.format(Locale.ENGLISH, "Precision[%d] is out of boundary.", precision));
         }
@@ -82,42 +88,41 @@ public class DataTypeDecimal implements IDataType {
 
     @Override
     public void serializeBinary(Object data, BinarySerializer serializer) throws IOException {
-        BigDecimal targetValue = ((BigDecimal) data).multiply(scaleFactor);
-        switch (this.nobits) {
-            case 32: {
-                serializer.writeInt(targetValue.intValue());
+        BigDecimal targetValue;
+        if (data instanceof BigInteger) {
+            targetValue = new BigDecimal((BigInteger) data);
+        } else if (data instanceof BigDecimal) {
+            targetValue = ((BigDecimal) data).multiply(scaleFactor);
+        } else {
+            throw new IllegalArgumentException("value must be one of BigInteger/BigDecimal, actual class is " + data.getClass().getCanonicalName());
+        }
+        int targetBytes = this.nobits / 8;
+        BigInteger plainIntegerValue = targetValue.toBigInteger();
+        byte[] byteArray = plainIntegerValue.toByteArray();
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        int bytesToBeAdded = targetBytes - byteArray.length;
+        while (bytesToBeAdded-- > 0) {
+            buffer.write(byteArray[0] < 0 ? 0xff : 0x00);
+        }
+        for (byte aByte : byteArray) {
+            if (buffer.size() == targetBytes) {
                 break;
             }
-            case 64: {
-                serializer.writeLong(targetValue.longValue());
-                break;
-            }
-            default: {
-                throw new RuntimeException(String.format(Locale.ENGLISH, "Unknown precision[%d] & scale[%d]", precision, scale));
-            }
+            buffer.write(aByte);
+        }
+        byte[] targetArray = buffer.toByteArray();
+        for (int i = targetArray.length; i > 0; i--) {
+            serializer.writeByte(targetArray[i - 1]);
         }
     }
 
     @Override
     public Object deserializeBinary(BinaryDeserializer deserializer) throws SQLException, IOException {
-        BigDecimal value;
-        switch (this.nobits) {
-            case 32: {
-                int v = deserializer.readInt();
-                value = BigDecimal.valueOf(v);
-                value = value.divide(scaleFactor);
-                break;
-            }
-            case 64: {
-                long v = deserializer.readLong();
-                value = BigDecimal.valueOf(v);
-                value = value.divide(scaleFactor);
-                break;
-            }
-            default: {
-                throw new RuntimeException(String.format(Locale.ENGLISH, "Unknown precision[%d] & scale[%d]", precision, scale));
-            }
+        byte[] v = new byte[this.nobits/8];
+        for (int i = v.length; i > 0; i--) {
+            v[i-1] = deserializer.readByte();
         }
+        BigDecimal value = new BigDecimal(new BigInteger(v)).divide(scaleFactor);
         value = value.setScale(scale, RoundingMode.HALF_UP);
         return value;
     }
@@ -138,5 +143,15 @@ public class DataTypeDecimal implements IDataType {
         Number scale = lexer.numberLiteral();
         Validate.isTrue(lexer.character() == ')');
         return new DataTypeDecimal("Decimal(" + precision.intValue() + "," + scale.intValue() + ")", precision.intValue(), scale.intValue());
+    }
+
+    @Override
+    public int precisionOrLength() {
+        return precision;
+    }
+
+    @Override
+    public int scale() {
+        return scale;
     }
 }

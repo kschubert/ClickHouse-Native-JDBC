@@ -13,6 +13,7 @@ import org.joda.time.DateTimeZone;
 import java.io.IOException;
 import java.sql.Date;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.sql.Types;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -102,6 +103,14 @@ public class DataTypeDate implements IDataType {
         } catch (ParseException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public Timestamp toTimestamp(Object data) {
+        if (data == null) {
+            return null;
+        }
+        return new Timestamp(((Date)data).getTime());
     }
 
     public static IDataType createDateType(SQLLexer lexer, PhysicalInfo.ServerInfo serverInfo) {

@@ -28,6 +28,8 @@ public class ClickHouseStatement extends SQLStatement {
     private long maxRows;
     private ClickHouseConfig cfg;
 
+    private int insertCount;
+
     public ClickHouseStatement(ClickHouseConnection connection) {
         this.connection = connection;
         this.cfg = connection.getConfigure().copy();
@@ -55,11 +57,12 @@ public class ClickHouseStatement extends SQLStatement {
             block = getSampleBlock(insertQuery);
             block.initWriteBuffer();
             new ValuesInputFormat(matcher.end() - 1, query).fillBlock(block);
-            return connection.sendInsertRequest(block);
+            return insertCount = connection.sendInsertRequest(block);
         }
 
         QueryResponse response = connection.sendQueryRequest(query, cfg);
         lastResultSet = new ClickHouseResultSet(response.header(), response.data().get(), this);
+        insertCount = -1;
         return 0;
     }
 
@@ -140,7 +143,7 @@ public class ClickHouseStatement extends SQLStatement {
 
     @Override
     public int getUpdateCount() throws SQLException {
-        return 0;
+        return insertCount;
     }
 
     public boolean getMoreResults() throws SQLException {

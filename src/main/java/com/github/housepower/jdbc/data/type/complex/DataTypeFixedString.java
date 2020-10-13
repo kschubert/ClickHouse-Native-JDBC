@@ -105,4 +105,9 @@ public class DataTypeFixedString implements IDataType {
         return new DataTypeFixedString("FixedString(" + fixedStringN.intValue() + ")",
                                        fixedStringN.intValue());
     }
+
+    @Override
+    public int precisionOrLength() {
+        return n;
+    }
 }

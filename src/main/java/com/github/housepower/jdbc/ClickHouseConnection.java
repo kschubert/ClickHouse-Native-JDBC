@@ -1,5 +1,23 @@
 package com.github.housepower.jdbc;
 
+import java.net.InetSocketAddress;
+import java.sql.Array;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLClientInfoException;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Struct;
+import java.util.Locale;
+import java.util.Properties;
+import java.util.TimeZone;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import com.github.housepower.jdbc.connect.PhysicalConnection;
 import com.github.housepower.jdbc.connect.PhysicalInfo;
 import com.github.housepower.jdbc.data.Block;
@@ -14,22 +32,6 @@ import com.github.housepower.jdbc.statement.ClickHousePreparedQueryStatement;
 import com.github.housepower.jdbc.statement.ClickHouseStatement;
 import com.github.housepower.jdbc.wrapper.SQLConnection;
 
-import java.net.InetSocketAddress;
-import java.sql.Array;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLClientInfoException;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Struct;
-import java.util.Locale;
-import java.util.Properties;
-import java.util.TimeZone;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 public class ClickHouseConnection extends SQLConnection {
 
     private static final Pattern VALUES_REGEX = Pattern.compile("[V|v][A|a][L|l][U|u][E|e][S|s]\\s*\\(");
@@ -39,6 +41,8 @@ public class ClickHouseConnection extends SQLConnection {
     private final ClickHouseConfig configure;
     private final AtomicReference<PhysicalInfo> atomicInfo;
     private ConnectionState state = ConnectionState.IDLE;
+    private String serverVersion;
+
 
     protected ClickHouseConnection(ClickHouseConfig configure, PhysicalInfo info) {
         this.isClosed = new AtomicBoolean(false);
@@ -146,7 +150,7 @@ public class ClickHouseConnection extends SQLConnection {
 
     // when sendInsertRequest we must ensure the connection is healthy
     // the sampleblock mus be called before this method
-    public Integer sendInsertRequest(Block block)
+    public int sendInsertRequest(Block block)
         throws SQLException {
         if (this.state != ConnectionState.WAITING_INSERT) {
             throw new RuntimeException("Call getSampleBlock before insert.");
@@ -204,5 +208,24 @@ public class ClickHouseConnection extends SQLConnection {
             physical.disPhysicalConnection();
             throw rethrows;
         }
+    }
+
+    PhysicalInfo.ServerInfo serverInfo() {
+        return atomicInfo.get().server();
+    }
+
+    public String getServerVersion() throws SQLException {
+		if (serverVersion == null) {
+            ResultSet rs = createStatement().executeQuery("select version()");
+            rs.next();
+            serverVersion = rs.getString(1);
+            rs.close();
+        }
+        return serverVersion;
+	}
+
+    @Override
+    public DatabaseMetaData getMetaData() throws SQLException {
+        return new ClickHouseDatabaseMetadata(configure.url(), this);
     }
 }

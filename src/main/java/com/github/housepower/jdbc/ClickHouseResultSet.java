@@ -1,13 +1,5 @@
 package com.github.housepower.jdbc;
 
-import com.github.housepower.jdbc.data.Block;
-import com.github.housepower.jdbc.data.Column;
-import com.github.housepower.jdbc.misc.CheckedIterator;
-import com.github.housepower.jdbc.misc.Validate;
-import com.github.housepower.jdbc.protocol.DataResponse;
-import com.github.housepower.jdbc.statement.ClickHouseStatement;
-import com.github.housepower.jdbc.wrapper.SQLResultSet;
-
 import java.math.BigDecimal;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -18,6 +10,14 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.Calendar;
+
+import com.github.housepower.jdbc.data.Block;
+import com.github.housepower.jdbc.data.Column;
+import com.github.housepower.jdbc.misc.CheckedIterator;
+import com.github.housepower.jdbc.misc.Validate;
+import com.github.housepower.jdbc.protocol.DataResponse;
+import com.github.housepower.jdbc.statement.ClickHouseStatement;
+import com.github.housepower.jdbc.wrapper.SQLResultSet;
 
 public class ClickHouseResultSet extends SQLResultSet {
     private int row = -1;
@@ -187,22 +187,27 @@ public class ClickHouseResultSet extends SQLResultSet {
     @Override
     public String getString(int index) throws SQLException {
         Object data = getObject(index);
-        return (String) data;
+        if (data == null) {
+            return null;
+        }
+        return data.toString();
     }
 
     @Override
     public Object getObject(int index) throws SQLException {
         Validate.isTrue(row >= 0 && row < current.rows(),
             "No row information was obtained.You must call ResultSet.next() before that.");
-        Column column = (lastFetchBlock = current).getByPosition((lastFetchColumn = index - 1));
-        Object rowData = column.values((lastFetchRow = row));
-        return rowData == null ? null: rowData;
+        Column column = column(index);
+        return data(column);
     }
 
     @Override
     public Timestamp getTimestamp(int index) throws SQLException {
-        Object data = getObject(index);
-        return (Timestamp) data;
+        Validate.isTrue(row >= 0 && row < current.rows(),
+                "No row information was obtained.You must call ResultSet.next() before that.");
+        Column column = column(index);
+        Object data = data(column);
+        return column.type().toTimestamp(data);
     }
 
     @Override
@@ -259,5 +264,14 @@ public class ClickHouseResultSet extends SQLResultSet {
             }
         }
         return new Block();
+    }
+
+    private Object data(Column column) {
+        return column.values((lastFetchRow = row));
+    }
+
+    private Column column(int index) throws SQLException {
+        Column column = (lastFetchBlock = current).getByPosition((lastFetchColumn = index - 1));
+        return column;
     }
 }

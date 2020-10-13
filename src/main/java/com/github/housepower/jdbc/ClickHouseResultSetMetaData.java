@@ -7,6 +7,7 @@ import com.github.housepower.jdbc.wrapper.SQLResultSetMetaData;
 
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 
 public class ClickHouseResultSetMetaData extends SQLResultSetMetaData {
 
@@ -79,7 +80,17 @@ public class ClickHouseResultSetMetaData extends SQLResultSetMetaData {
     }
 
 
+    @Override
+    public int getPrecision(int index) throws SQLException {
+        return header.getByPosition(index).type().precisionOrLength();
+    }
+
     /*=========================================================*/
+
+    @Override
+    public int getScale(int index) throws SQLException {
+        return header.getByPosition(index).type().scale();
+    }
 
     @Override
     public boolean isReadOnly(int index) throws SQLException {
